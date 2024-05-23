@@ -69,6 +69,17 @@
   border-radius: 0.8em;
 }
 
+.timeline-content:not(:last-of-type) {
+  margin-bottom: 12px;
+}
+
 .timeline-content p {
   margin: 0.6em 0;
+}
+
+.timeline-detail{
+  font-size: 12px;
+  margin: 0;
+  color: gray;
+  text-align: right;
 }

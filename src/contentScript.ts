@@ -1,58 +1,69 @@
 import * as dayjs from 'dayjs'
-
+// import * as utc from 'dayjs/plugin/utc';
+// dayjs.extend(utc);
 class TimeLineItem {
-    constructor(private date:string, private content:string[] = []) {
+    constructor(private day:string, private contents:[unix:number, text:string][]) {
     }
 
-    public addContent(text:string) {
-        this.content.push(text);
+    public getDay() {
+        return this.day;
+    }
+
+    public addContent(contentData:[number, string]) {
+        const idx = this.contents.findIndex((data)=> contentData[0] < data[0]);
+        if (idx === -1) {
+            this.contents.push(contentData);
+        } else {
+            this.contents.splice(idx, 0, contentData);
+        }
     }
 
     public render(md:any, env:any):string {
         return `<div class="timeline-item">
         <div class="timeline-header">
           <h3 class="timeline-date">
-            ${this.date}
+            ${this.day}
           </h3>
         </div>
-        <div class="timeline-content">${md.render(this.content.join('\n'), env)}</div>
+        ${this.contents.map((content)=>{
+            return `<div class="timeline-content">${md.render(content[1], env)}</div>`
+            // return `<div class="timeline-content">${md.render(content[1], env)}<p class="timeline-detail">${dayjs(content[0]).local().format('HH:hh:mm')}</p></div>`
+        }).join('')}
         </div>`
     }
 }
 
 function render(md:any, content:string, env:Object) {
-    const contentList = content.split('\n');
-    const timelineList:TimeLineItem[] = [];
+    const INVALID_TIME_FORMAT = 'Invalid Time Format';
+    const timelineItemMap: Map<string, TimeLineItem> = new Map();
 
-    let timelineItem:TimeLineItem;
+    const reg = /(?<=^|\n)Date: ([0-9-_:.,()/]+?)\n([\s\S]*?)(?=\nDate: ([0-9-_:.,()/]+?)\n|$)/g;
+    let matchResult;
 
-    for (let idx = 0; idx < contentList.length; idx++) {
-        const currContent = contentList[idx];
+    while ((matchResult = reg.exec(content)) !== null) {
+        let dateStr:string = matchResult[1].trim();
+        let day:string;
 
-        const matchDate = /^Date: (.*)$/.exec(currContent);
-        if (matchDate) {
-            let date = matchDate[1].trim();
-            if (dayjs(date).isValid()) {
-                date = dayjs(date).format('YYYY/M/D ddd')
-            } else {
-                date = 'Error format';
-            }
+        const dayObj = dayjs(dateStr);
 
-            timelineItem = new TimeLineItem(date);
-            timelineList.push(timelineItem);
+        if (dayObj.isValid()) {
+            day = dayObj.format('YYYY/M/D')
         } else {
-            if (!timelineItem) {
-                timelineItem = new TimeLineItem('Error format');
-                timelineList.push(timelineItem);
-            } 
+            day = INVALID_TIME_FORMAT;
+        }
 
-            timelineItem.addContent(currContent);
+        const dateContent:string = matchResult[2];
+
+        if (day!== INVALID_TIME_FORMAT && timelineItemMap.has(day)) {
+            timelineItemMap.get(day).addContent([dayObj.unix(), dateContent]);
+        } else {
+            timelineItemMap.set(day, new TimeLineItem(day, [[dayObj.unix(), dateContent]]));
         }
     }
 
-    return `<div class="timeline-container">${
-        timelineList.map((item)=> item.render(md, env)).join('')
-    }</div>`
+    const sortTimeline = Array.from(timelineItemMap.values()).sort((a,b) => dayjs(a.getDay()).unix() - dayjs(b.getDay()).unix());
+
+    return `<div class="timeline-container">${sortTimeline.map((item)=> item.render(md, env)).join('')}</div>`
 }
 
 export default (context: { contentScriptId: string, postMessage: any }) => {
@@ -63,7 +74,6 @@ export default (context: { contentScriptId: string, postMessage: any }) => {
 			};
 
             markdownIt.renderer.rules.fence = function(tokens, idx, options, env, self) {
-                console.log(tokens, idx, options, env, self);
 				const token = tokens[idx];
 				if (token.info !== 'timeline') return defaultRender(tokens, idx, options, env, self);
 

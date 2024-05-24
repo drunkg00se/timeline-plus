@@ -1,6 +1,8 @@
 import * as dayjs from 'dayjs'
-// import * as utc from 'dayjs/plugin/utc';
-// dayjs.extend(utc);
+import * as customParseFormat from 'dayjs/plugin/customParseFormat';
+
+dayjs.extend(customParseFormat);
+
 class TimeLineItem {
     constructor(private day:string, private contents:[unix:number, text:string][]) {
     }
@@ -37,14 +39,17 @@ function render(md:any, content:string, env:Object) {
     const INVALID_TIME_FORMAT = 'Invalid Time Format';
     const timelineItemMap: Map<string, TimeLineItem> = new Map();
 
-    const reg = /(?<=^|\n)Date: ([0-9-_:.,()/]+?)\n([\s\S]*?)(?=\nDate: ([0-9-_:.,()/]+?)\n|$)/g;
+    const reg = /(?<=^|\n)Date: ([0-9TWZ -_:.,()/+]+?)\n([\s\S]*?)(?=\nDate: ([0-9TWZ -_:.,()/+]+?)\n|$)/g;
     let matchResult;
 
     while ((matchResult = reg.exec(content)) !== null) {
         let dateStr:string = matchResult[1].trim();
         let day:string;
 
-        const dayObj = dayjs(dateStr);
+        let dayObj = dayjs(dateStr);
+        if (!dayObj.isValid()) {
+            dayObj = dayjs(dateStr, ['DD/MM/YYYY HH:mm', 'DD/MM/YYYY', 'MM/YYYY']);
+        }
 
         if (dayObj.isValid()) {
             day = dayObj.format('YYYY/M/D')
@@ -77,7 +82,25 @@ export default (context: { contentScriptId: string, postMessage: any }) => {
 				const token = tokens[idx];
 				if (token.info !== 'timeline') return defaultRender(tokens, idx, options, env, self);
 
-				return render(markdownIt, token.content, env);
+                    
+                // Rich text editor support:
+                // The joplin-editable and joplin-source CSS classes mark the generated div
+                // as a region that needs special processing when converting back to markdown.
+                // This element helps Joplin reconstruct the original markdown.
+                const richTextEditorMetadata = `
+                <pre
+                    class="joplin-source"
+                    data-joplin-language="timeline"
+                    data-joplin-source-open="\`\`\`timeline\n"
+                    data-joplin-source-close="\`\`\`"
+                >${markdownIt.utils.escapeHtml(token.content)}</pre>`;
+
+
+                return `
+                <div class="timeline joplin-editable">
+                    ${richTextEditorMetadata}
+                    ${render(markdownIt, token.content, env)}
+                </div>`;
 			};
         },
         assets: function () {

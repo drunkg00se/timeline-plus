@@ -46,9 +46,9 @@ function render(md:any, content:string, env:Object) {
         let dateStr:string = matchResult[1].trim();
         let day:string;
 
-        let dayObj = dayjs(dateStr);
+        let dayObj = dayjs(dateStr, ['DD/MM/YYYY HH:mm', 'DD/MM/YYYY']);
         if (!dayObj.isValid()) {
-            dayObj = dayjs(dateStr, ['DD/MM/YYYY HH:mm', 'DD/MM/YYYY', 'MM/YYYY']);
+             dayObj = dayjs(dateStr);
         }
 
         if (dayObj.isValid()) {
